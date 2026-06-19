@@ -14,12 +14,13 @@ import asyncio
 
 from starlette.applications import Starlette
 from starlette.routing import Route, Mount
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 from uvicorn import Config, Server
 
 from mcp_oauth import AuthServerSettings, SimpleAuthSettings
 from mcp_oauth.server.auth_provider.simple_auth_provider import SimpleOAuthProvider
+from context_engine.oauth_store import PersistentOAuthProvider
 from mcp_oauth.server.features.functions import ExtraFunctions
 from mcp.server.auth.routes import create_auth_routes
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
@@ -77,7 +78,7 @@ def create_app():
         superuserpassword=oauth_pass,
         mcp_scope="user",
     )
-    oauth_provider = SimpleOAuthProvider(
+    oauth_provider = PersistentOAuthProvider(
         settings=auth_settings,
         auth_callback_url=f"{server_url}/login",
         server_url=server_url,
@@ -133,6 +134,17 @@ def create_app():
     async def health(request):
         return PlainTextResponse("ok")
 
+    # OAuth Protected Resource Metadata (RFC 9728). Newer MCP clients
+    # (claude.ai / Cowork connectors) read the resource_metadata URL from the
+    # 401 WWW-Authenticate header and require this endpoint to start OAuth.
+    async def oauth_protected_resource(request):
+        return JSONResponse({
+            "resource": server_url,
+            "authorization_servers": [server_url],
+            "scopes_supported": ["user"],
+            "bearer_methods_supported": ["header"],
+        })
+
     async def upload_db(request):
         auth = request.headers.get("authorization", "")
         if auth != f"Bearer {oauth_pass}":
@@ -149,6 +161,8 @@ def create_app():
     all_routes = [
         Route("/health", health),
         Route("/admin/upload-db", upload_db, methods=["POST"]),
+        Route("/.well-known/oauth-protected-resource", oauth_protected_resource),
+        Route("/.well-known/oauth-protected-resource/{resource:path}", oauth_protected_resource),
         Mount("/api", app=api_mcp_app),   # API key: /api/sse, /api/messages/
     ] + oauth_routes + [
         Mount("/", app=oauth_mcp_app),    # OAuth: /sse, /messages/
