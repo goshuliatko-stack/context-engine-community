@@ -25,9 +25,10 @@ Tento skill vyrobí kompletnú **Zmluvu o sprostredkovaní** na predaj nehnuteľ
    - Nie → bežné podielové spoluvlastníctvo — opýtaj sa na presný podiel každého predávajúceho.
 7. **Body 9.–12. čl. III** („predám tvoju nehnuteľnosť alebo dovolenka zdarma" ponuka) — majú byť v zmluve, alebo si ich tento klient neželá?
 8. **Typ nehnuteľnosti** — byt, dom alebo pozemok? (ovplyvňuje právny popis a formulácie „byt a pozemok" / „dom a pozemok" / „pozemok").
-9. **Čokoľvek ďalšie, čo sa javí dôležité** — napr. existujúca ťarcha/zostatok úveru na nehnuteľnosti, aktuálnosť priezviska (sobáš/rozvod od vystavenia LV), cieľová Drive zložka, miesto podpisu (ak nie je Žilina), neštandardný tok platby. Ak pri čítaní vzoru/LV narazíš na nejasnosť, **spýtaj sa namiesto hádania** — to platí počas celej tvorby zmluvy, nielen na začiatku.
+9. **Cieľový priečinok** — do akého priečinka (Google Drive) má skill uložiť hotovú zmluvu? Nepredpokladaj zložku ani podľa predchádzajúceho obchodu — vždy sa spýtaj, prípadne ponúkni nájdenú zložku (`search_files`) na potvrdenie.
+10. **Čokoľvek ďalšie, čo sa javí dôležité** — napr. existujúca ťarcha/zostatok úveru na nehnuteľnosti, aktuálnosť priezviska (sobáš/rozvod od vystavenia LV), miesto podpisu (ak nie je Žilina), neštandardný tok platby. Ak pri čítaní vzoru/LV narazíš na nejasnosť, **spýtaj sa namiesto hádania** — to platí počas celej tvorby zmluvy, nielen na začiatku.
 
-Až keď máš odpovede na 1.–8. (alebo používateľ explicitne povie „neviem, daj červeno"), pokračuj na zber zostávajúcich dát (sekcia 1) a stavbu dokumentu (sekcia 2).
+Až keď máš odpovede na 1.–9. (alebo používateľ explicitne povie „neviem, daj červeno"), pokračuj na zber zostávajúcich dát (sekcia 1) a stavbu dokumentu (sekcia 2).
 
 ### 0.1 Doplnkové dáta (zozbieraj/dohľadaj popri rozhovore)
 
@@ -36,7 +37,6 @@ Až keď máš odpovede na 1.–8. (alebo používateľ explicitne povie „nevi
 | Predmet (nehnuteľnosť) | „byt Schmidtovcov", „2i M. Bella" | LV výpisy, Context Engine projekt |
 | Tok platby | „klient posiela peniaze mne" → vyber správny vzor | určuje výber vzoru |
 | Vlastník/-ci (meno, dátum narodenia, pobyt...) | Tomáš Schmidt + Natália Schmidtová | LV, Context Engine |
-| Cieľová zložka | `G:\Môj disk\Goso Nehnuteľnosti\1 - 2i M.Bella - Schmidt` | Google Drive search |
 
 ---
 
@@ -173,8 +173,8 @@ Vyznač červeno (`R(...)` → `RGBColor(0xFF,0x00,0x00)`) všetko, čo s istoto
 ## 5. DORUČENIE VÝSLEDKU
 
 1. **Vždy pošli .docx do chatu** cez `SendUserFile` — okamžitý náhľad pre používateľa.
-2. **Skús uložiť do cieľovej Drive zložky:**
-   - Nájdi zložku: `search_files` (napr. parent „Goso Nehnuteľnosti" → titul „1 - 2i M.Bella - Schmidt").
+2. **Skús uložiť do cieľovej Drive zložky, ktorú používateľ uviedol v otázke č. 9 (sekcia 0):**
+   - Over/nájdi presnú zložku: `search_files` (napr. parent „Goso Nehnuteľnosti" → titul, ktorý povedal používateľ).
    - Upload: `mcp__Google_Drive__create_file` s `parentId`, `title`, `contentMimeType = application/vnd.google-apps.document` alebo originál docx mime, `disableConversionToGoogleType` podľa potreby, `base64Content`.
    - ⚠️ Ak by upload vyžadoval **ručné prepisovanie base64** cez nástroj naslepo, **nerob to** (riziko poškodenia). Radšej daj používateľovi súbor z chatu nech ho presunie sám, alebo použi spoľahlivý upload mechanizmus. Nikdy nenahraj potenciálne poškodený súbor do cieľovej zložky.
 3. **Zhrň používateľovi**:
@@ -185,7 +185,8 @@ Vyznač červeno (`R(...)` → `RGBColor(0xFF,0x00,0x00)`) všetko, čo s istoto
 
 ## 6. RÝCHLY CHECKLIST
 
-- [ ] Prešiel som povinný rozhovor (sekcia 0) a dostal odpoveď na všetky otázky 1.–8.?
+- [ ] Prešiel som povinný rozhovor (sekcia 0) a dostal odpoveď na všetky otázky 1.–9.?
+- [ ] Mám potvrdený cieľový priečinok na uloženie zmluvy (otázka č. 9)?
 - [ ] Sprostredkovateľ potvrdený (Venoc s. r. o. alebo iná firma podľa zadania)?
 - [ ] Mám cenu, províziu, dobu platnosti, tok platby?
 - [ ] Počet predávajúcich a sú/nie sú manželia → BSM 1/1 vs. podielové spoluvlastníctvo?
