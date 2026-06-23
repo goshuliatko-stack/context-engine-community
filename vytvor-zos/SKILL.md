@@ -1,31 +1,42 @@
 ---
 name: vytvor-zos
-description: "Vytvor Zmluvu o sprostredkovaní (ZoS) na predaj nehnuteľnosti ako hotový .docx vo Worde. Použi keď používateľ povie: priprav/vytvor/sprav mi zmluvu o sprostredkovaní, ZoS, sprostredkovateľskú zmluvu, zmluvu na byt/dom/pozemok, 'klient mi posiela peniaze na byt XY'. Skill nazbiera dáta (Zmluvy RAG, Vzorové zmluvy na Google Drive, LV výpisy, Context Engine), vyberie správny vzor podľa toku platby, vyplní známe údaje, neznáme vyznačí ČERVENO ako [DOPLNIŤ], zachová písmo/štýl vzoru, vygeneruje .docx cez python-docx, pošle ho do chatu a uloží do cieľovej Drive zložky."
+description: "Vytvor Zmluvu o sprostredkovaní (ZoS) na predaj nehnuteľnosti ako hotový .docx vo Worde. Použi keď používateľ povie: priprav/vytvor/sprav mi zmluvu o sprostredkovaní, ZoS, sprostredkovateľskú zmluvu, zmluvu na byt/dom/pozemok, 'klient mi posiela peniaze na byt XY'. Skill najprv prejde POVINNÝM rozhovorom (sprostredkovateľ, cena, provízia, doba platnosti, počet predávajúcich, manželia/BSM, body 9.–12. čl. III, typ nehnuteľnosti), potom nazbiera dáta (Zmluvy RAG, Vzorové zmluvy na Google Drive, LV výpisy, Context Engine), vyberie správny vzor podľa toku platby, vyplní známe údaje, neznáme vyznačí ČERVENO ako [DOPLNIŤ], zachová písmo/štýl vzoru, vygeneruje .docx cez python-docx, pošle ho do chatu a uloží do cieľovej Drive zložky."
 ---
 
 # Vytvor ZoS — Zmluva o sprostredkovaní (behavioral guide)
 
-Tento skill vyrobí kompletnú **Zmluvu o sprostredkovaní** na predaj nehnuteľnosti ako .docx súbor, štýlovo podľa vzoru, so známymi údajmi vyplnenými a neznámymi vyznačenými červeno. Sprostredkovateľom je štandardne **Venoc s. r. o.** (Georgi Conev).
+Tento skill vyrobí kompletnú **Zmluvu o sprostredkovaní** na predaj nehnuteľnosti ako .docx súbor, štýlovo podľa vzoru, so známymi údajmi vyplnenými a neznámymi vyznačenými červeno.
 
-> Filozofia: **nikdy nehádaj právny text** — vždy ho čerpaj zo vzoru. **Nikdy nevymýšľaj osobné údaje** — čo nevieš, vyznač červeno `[DOPLNIŤ]`. Radšej viac červených polí ako jeden tichý nesprávny údaj.
+> Filozofia: **nikdy nehádaj právny text** — vždy ho čerpaj zo vzoru. **Nikdy nevymýšľaj osobné údaje** — čo nevieš, vyznač červeno `[DOPLNIŤ]`. **Nikdy nepredpokladaj** kľúčové parametre (sprostredkovateľ, cena, provízia, doba, manželia/BSM, rozsah článku III, typ nehnuteľnosti) — vždy sa na ne najprv spýtaj. Radšej viac červených polí/otázok ako jeden tichý nesprávny údaj.
 
 ---
 
-## 0. ČO POTREBUJEŠ OD POUŽÍVATEĽA (zozbieraj na začiatku)
+## 0. POVINNÝ ROZHOVOR — VŽDY SA SPÝTAJ, NIKDY NEPREDPOKLAJ
 
-Ak niečo z toho chýba a nedá sa dohľadať, **opýtaj sa** alebo vyznač červeno:
+**Predtým, než začneš stavať .docx, polož používateľovi tieto otázky** (môžeš ich poslať v jednej správe, ale **musíš dostať odpoveď na každú** skôr než vygeneruješ dokument — nech sa na nič nezabudne):
+
+1. **Sprostredkovateľ** — „Má byť sprostredkovateľom **Venoc s. r. o.**, alebo má ísť o inú firmu?" Nikdy nepoužívaj Venoc s. r. o. ticho ako default, vždy si to potvrď, aj keď to bola posledných 10× tá istá firma.
+2. **Cena** nehnuteľnosti (suma, za ktorú sa predáva).
+3. **Provízia** sprostredkovateľa (% alebo pevná suma).
+4. **Doba platnosti zmluvy** — dokedy/koľko dní od podpisu má zmluva platiť.
+5. **Počet predávajúcich** (Záujemcov).
+6. **Sú predávajúci manželia?**
+   - Áno → nehnuteľnosť sa NEUVÁDZA ako podielové spoluvlastníctvo (napr. 1/2 + 1/2), ale ako **bezpodielové spoluvlastníctvo manželov (BSM)** v podiele **1/1**.
+   - Nie → bežné podielové spoluvlastníctvo — opýtaj sa na presný podiel každého predávajúceho.
+7. **Body 9.–12. čl. III** („predám tvoju nehnuteľnosť alebo dovolenka zdarma" ponuka) — majú byť v zmluve, alebo si ich tento klient neželá?
+8. **Typ nehnuteľnosti** — byt, dom alebo pozemok? (ovplyvňuje právny popis a formulácie „byt a pozemok" / „dom a pozemok" / „pozemok").
+9. **Čokoľvek ďalšie, čo sa javí dôležité** — napr. existujúca ťarcha/zostatok úveru na nehnuteľnosti, aktuálnosť priezviska (sobáš/rozvod od vystavenia LV), cieľová Drive zložka, miesto podpisu (ak nie je Žilina), neštandardný tok platby. Ak pri čítaní vzoru/LV narazíš na nejasnosť, **spýtaj sa namiesto hádania** — to platí počas celej tvorby zmluvy, nielen na začiatku.
+
+Až keď máš odpovede na 1.–8. (alebo používateľ explicitne povie „neviem, daj červeno"), pokračuj na zber zostávajúcich dát (sekcia 1) a stavbu dokumentu (sekcia 2).
+
+### 0.1 Doplnkové dáta (zozbieraj/dohľadaj popri rozhovore)
 
 | Údaj | Príklad | Kde hľadať ak nepovie |
 |------|---------|------------------------|
 | Predmet (nehnuteľnosť) | „byt Schmidtovcov", „2i M. Bella" | LV výpisy, Context Engine projekt |
-| Cena | 149 990 € | musí povedať používateľ |
-| Provízia | 5,23 % | musí povedať používateľ |
-| Doba platnosti | 150 dní od podpisu | musí povedať používateľ |
 | Tok platby | „klient posiela peniaze mne" → vyber správny vzor | určuje výber vzoru |
-| Vlastník/-ci (Záujemca) | Tomáš Schmidt + Natália Schmidtová | LV, Context Engine |
+| Vlastník/-ci (meno, dátum narodenia, pobyt...) | Tomáš Schmidt + Natália Schmidtová | LV, Context Engine |
 | Cieľová zložka | `G:\Môj disk\Goso Nehnuteľnosti\1 - 2i M.Bella - Schmidt` | Google Drive search |
-
-**Sprostredkovateľ je štandardne Venoc s. r. o.** — ak používateľ povie inak, použi jeho zadanie.
 
 ---
 
@@ -73,9 +84,9 @@ Vzorové zmluvy
 - **Nehnuteľnosť:** z LV výpisov (číslo bytu, súpisné č., LV č., k. ú., parcela, výmera, podiely, titul nadobudnutia, ťarchy/záložné práva).
 - LV výpisy bývajú nahrané priamo ako prílohy alebo na Drive. Disclaimer „Výpis je nepoužiteľný na právne úkony" → preto aktuálny stav ťarchy/úveru ku dňu podpisu vyznač červeno `[DOPLNIŤ]`.
 
-### 1.5 Stabilné údaje sprostredkovateľa (Venoc s. r. o.)
+### 1.5 Stabilné údaje sprostredkovateľa (ak je to Venoc s. r. o.)
 
-Ak ich nevieš dohľadať vo vzore, použi tieto (over ak je pochybnosť):
+Tieto údaje sú uložené v **Context Engine** (`ctx_company("Venoc s. r. o.")` / `ctx_search`). Skús ich najprv dohľadať tam. Ak tam ešte nie sú (alebo Context Engine zlyhá), použi tieto a ulož ich pomocou `ctx_add_company` (názov, IČO, sídlo, web, poznámky s OR zápisom, účtom, konateľom, mailom, telefónom), nech ich nabudúce nemusíš prepisovať z vzoru:
 ```
 Obchodné meno: Venoc s. r. o.
 OR: Okresný súd Žilina, oddiel Sro, vl. č. 79531/L
@@ -87,6 +98,8 @@ Mail: conevreality@gmail.com
 Tel.: +421 948 880 069
 Web: www.georgiconev.sk
 ```
+
+⚠️ Toto je len fallback pre Venoc s. r. o. — ak používateľ pri otázke č. 1 (sekcia 0) zvolí **inú firmu**, tieto údaje nepoužívaj a vyžiadaj si analogické údaje (IČO, sídlo, OR zápis, účet, konateľ, kontakt) o danej firme; neznáme polia vyznač červeno.
 
 ---
 
@@ -111,7 +124,7 @@ V tomto adresári je pripravený **`build_zos_template.py`** — skopíruj ho do
 ### 2.2 Štruktúra (6 článkov + podpisy + príloha)
 1. **Čl. I — Zmluvné strany** (Záujemca/-ovia + Sprostredkovateľ)
 2. **Čl. II — Úvodné ustanovenia** (popis nehnuteľnosti z LV, titul nadobudnutia, ťarchy)
-3. **Čl. III — Predmet zmluvy** (záväzky, exkluzivita, 10 % zmluvná pokuta, „Ponuka" / marketing)
+3. **Čl. III — Predmet zmluvy** (záväzky, exkluzivita, 10 % zmluvná pokuta, body 9.–12. „Ponuka" / marketing — **len ak používateľ pri otázke č. 7 povedal áno**, inak vynechaj a nahraď poznámkou že boli vynechané)
 4. **Čl. IV — Platobné podmienky** (cena slovom, provízia %, aukcia +30 %, tok platby podľa vzoru)
 5. **Čl. V — Doba trvania** (na dobu určitú X dní od uzatvorenia)
 6. **Čl. VI — Spoločné a záverečné ustanovenia**
@@ -135,8 +148,9 @@ Vzory bývajú písané pre **jedného** Záujemcu (jednotné číslo). Pri **vi
 | 3. | Záujemcovi | Záujemcom |
 | 7. | Záujemcom | Záujemcami |
 
-- Pri každom spoluvlastníkovi uveď **spoluvlastnícky podiel** (napr. 1/2).
+- Pri každom spoluvlastníkovi uveď **spoluvlastnícky podiel** (napr. 1/2) — **okrem prípadu manželov/BSM** (pozri nižšie).
 - Zaveď: *„(Záujemca 1 a Záujemca 2 spolu ďalej aj ako „Záujemcovia")"*.
+- **Manželia → BSM:** ak používateľ pri otázke č. 6 (sekcia 0) povedal, že predávajúci sú manželia, NEPÍŠ podielové spoluvlastníctvo (1/2 + 1/2). Použi formuláciu typu *„Záujemcovia sú manželmi a nehnuteľnosť vlastnia v bezpodielovom spoluvlastníctve manželov (BSM) v podiele 1/1"* a pri poli „Spoluvlastnícky podiel" uveď pre oboch **1/1 (BSM)** namiesto zlomku. Toto NIE je červené pole — vyplýva priamo z odpovede na otázku č. 6, nehádaj ho.
 - Počet vyhotovení = počet strán (napr. 2 Záujemcovia + Sprostredkovateľ → **3 vyhotovenia**).
 - Každý Záujemca má vlastnú podpisovú čiaru.
 - **Rodné priezvisko** uveď samostatným poľom, ak sa líši od súčasného (napr. po svadbe).
@@ -152,7 +166,7 @@ Vyznač červeno (`R(...)` → `RGBColor(0xFF,0x00,0x00)`) všetko, čo s istoto
 - Aktuálny stav ťarchy / výška zostatku úveru ku dňu podpisu
 - Dátum podpisu zmluvy
 
-Údaj, ktorý používateľ **explicitne potvrdil**, NEdávaj červeno (napr. „pani je vydatá" → rodinný stav čierno).
+Údaj, ktorý používateľ **explicitne potvrdil**, NEdávaj červeno (napr. „pani je vydatá" → rodinný stav čierno). To platí aj pre odpovede z povinného rozhovoru (sekcia 0) — sprostredkovateľ, cena, provízia, doba, manželia/BSM, body 9.–12., typ nehnuteľnosti sú po odpovedi POTVRDENÉ údaje, nie červené polia.
 
 ---
 
@@ -171,11 +185,15 @@ Vyznač červeno (`R(...)` → `RGBColor(0xFF,0x00,0x00)`) všetko, čo s istoto
 
 ## 6. RÝCHLY CHECKLIST
 
-- [ ] Mám cenu, províziu %, dobu platnosti, tok platby?
+- [ ] Prešiel som povinný rozhovor (sekcia 0) a dostal odpoveď na všetky otázky 1.–8.?
+- [ ] Sprostredkovateľ potvrdený (Venoc s. r. o. alebo iná firma podľa zadania)?
+- [ ] Mám cenu, províziu, dobu platnosti, tok platby?
+- [ ] Počet predávajúcich a sú/nie sú manželia → BSM 1/1 vs. podielové spoluvlastníctvo?
+- [ ] Body 9.–12. čl. III — zahrnuté alebo vynechané podľa odpovede používateľa?
+- [ ] Typ nehnuteľnosti (byt/dom/pozemok) potvrdený a premietnutý do formulácií?
 - [ ] Vzor načítaný cez `read_file_content` (nie base64 prepis)?
-- [ ] Sprostredkovateľ = Venoc s. r. o. (alebo podľa zadania)?
 - [ ] Údaje osôb z Context Engine + LV, priezviská aktuálne?
-- [ ] Nehnuteľnosť kompletne z LV (byt, pozemok, podiely, titul, ťarchy)?
+- [ ] Nehnuteľnosť kompletne z LV (byt/dom/pozemok, podiely, titul, ťarchy)?
 - [ ] Jeden/viac vlastníkov → gramatika v správnom čísle?
 - [ ] Neznáme polia ČERVENO `[DOPLNIŤ]`?
 - [ ] Cena číslom aj slovom?

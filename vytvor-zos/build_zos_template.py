@@ -3,6 +3,10 @@
 ŠABLÓNA pre generovanie Zmluvy o sprostredkovaní (ZoS) cez python-docx.
 
 POUŽITIE:
+  0. PRED úpravou tohto skriptu prejdi povinný rozhovor s používateľom (SKILL.md sekcia 0):
+     sprostredkovateľ, cena, provízia, doba platnosti, počet predávajúcich, manželia/BSM,
+     body 9.–12. čl. III, typ nehnuteľnosti (byt/dom/pozemok) — a podľa odpovedí nastav
+     DATA["je_bsm"], DATA["vratane_ponuky_9_12"], DATA["nehnutelnost_typ"] a SPROSTREDKOVATEL nižšie.
   1. pip install python-docx
   2. Uprav blok DATA nižšie (osoby, nehnuteľnosť, cena, provízia, doba).
   3. Neznáme údaje nechaj ako R("[DOPLNIŤ]") — vykreslia sa ČERVENO.
@@ -12,7 +16,8 @@ POUŽITIE:
 POZNÁMKY:
   - Právny text čerpaj z VZORU (read_file_content), nie z hlavy.
   - Pri VIAC vlastníkoch sklonuj "Záujemca" → "Záujemcovia/Záujemcov/Záujemcom/Záujemcami".
-  - Sprostredkovateľ je štandardne Venoc s. r. o.
+  - Sprostredkovateľ NIE je automaticky Venoc s. r. o. — vždy sa najprv spýtaj (pozri SKILL.md sekcia 0).
+  - Ak su predávajúci manželia → DATA["je_bsm"] = True → podiel 1/1 (BSM), nie zlomky.
 """
 from docx import Document
 from docx.shared import Pt, RGBColor, Cm
@@ -31,6 +36,13 @@ DATA = {
     "miesto_podpisu": "Žiline",
     "pocet_vyhotoveni": "3",   # = počet zmluvných strán
     "out_path": "/tmp/contract_work/Zmluva_o_sprostredkovani.docx",
+    # Sú predávajúci manželia? Ak True → BSM (bezpodielové spoluvlastníctvo manželov), podiel 1/1.
+    # Ak False → bežné podielové spoluvlastníctvo (podiel každého z poľa "podiel" nižšie).
+    "je_bsm": False,
+    # Majú byť v zmluve body 9.–12. čl. III ("predám tvoju nehnuteľnosť alebo dovolenka zdarma")?
+    "vratane_ponuky_9_12": True,
+    # Typ nehnuteľnosti: "byt" | "dom" | "pozemok" — ovplyvňuje formulácie nižšie.
+    "nehnutelnost_typ": "byt",
 }
 
 # Záujemcovia (spoluvlastníci). Pridaj/uber položky podľa počtu vlastníkov.
@@ -62,6 +74,9 @@ ZAUJEMCOVIA = [
     },
 ]
 
+# Sprostredkovateľ — VŽDY si najprv potvrď s používateľom, či má byť Venoc s. r. o. alebo iná firma
+# (pozri SKILL.md sekcia 0, otázka č. 1). Údaje Venoc s. r. o. sú uložené aj v Context Engine
+# (ctx_company("Venoc s. r. o.")) — skús ich odtiaľ dohľadať ako prvý zdroj.
 SPROSTREDKOVATEL = {
     "obchodne_meno": "Venoc s. r. o.",
     "or_zapis": "zapísaná v Obchodnom registri Okresného súdu Žilina, oddiel: Sro, vl. č. 79531/L",
@@ -158,6 +173,13 @@ def field(label, value, placeholder="[DOPLNIŤ]"):
         body(N(f"{label}: {value}"), justify=False, space_after=2)
 
 
+# Označenie nehnuteľnosti v texte podľa typu (byt/dom/pozemok) — pozri DATA["nehnutelnost_typ"]
+NEHNUTELNOST_LABEL = {
+    "byt": "byt a pozemok",
+    "dom": "dom a pozemok",
+    "pozemok": "pozemok",
+}[DATA["nehnutelnost_typ"]]
+
 # Pomocníci na skloňovanie (jeden vs viac vlastníkov)
 PLURAL = len(ZAUJEMCOVIA) > 1
 Z_NOM = "Záujemcovia" if PLURAL else "Záujemca"          # 1. pád
@@ -191,12 +213,16 @@ for i, z in enumerate(ZAUJEMCOVIA, start=1):
     field("Mail", z.get("mail"))
     field("Tel. číslo", z.get("tel"))
     field("Č. účtu", z.get("ucet"), placeholder="[DOPLNIŤ – IBAN]")
-    field("Spoluvlastnícky podiel na nehnuteľnosti", z.get("podiel"))
+    podiel_zobrazeny = "1/1 (bezpodielové spoluvlastníctvo manželov – BSM)" if DATA["je_bsm"] else z.get("podiel")
+    field("Spoluvlastnícky podiel na nehnuteľnosti", podiel_zobrazeny)
     body(N(f"Ďalej len ako „Záujemca {i}“."), justify=False, space_after=10)
 
 if PLURAL:
     body(N("(Záujemca 1 a Záujemca 2 spolu ďalej aj ako „Záujemcovia“ v príslušnom gramatickom tvare.)"),
          justify=False, space_after=10)
+    if DATA["je_bsm"]:
+        body(N(f"{Z_NOM} {VYHLASUJU}, že sú manželmi a nehnuteľnosť nadobudli a vlastnia v bezpodielovom "
+               "spoluvlastníctve manželov (ďalej len „BSM“) v podiele 1/1."), justify=False, space_after=10)
 
 s = SPROSTREDKOVATEL
 body(N(f"Obchodné meno: {s['obchodne_meno']}"), justify=False, space_after=2)
@@ -216,12 +242,16 @@ body(N("ktorí vyhlásili, že sú k uzatváranému právnemu úkonu oprávnení
 heading("Článok II.", 14)
 heading("Úvodné ustanovenia", 12)
 body(N("Sprostredkovateľ je právnická osoba vykonávajúca podnikateľskú činnosť v zmysle príslušných oprávnení uvedených v Obchodnom registri SR."))
-podiel_veta = (f"{Z_NOM} {SU} podielovými spoluvlastníkmi, každý v rozsahu spoluvlastníckeho podielu, nasledujúcej nehnuteľnosti:"
-               if PLURAL else f"{Z_NOM} {SU} vlastníkom nasledujúcej nehnuteľnosti:")
+if DATA["je_bsm"]:
+    podiel_veta = f"{Z_NOM} {SU} manželmi a vlastníkmi v bezpodielovom spoluvlastníctve manželov (BSM) v podiele 1/1 nasledujúcej nehnuteľnosti:"
+elif PLURAL:
+    podiel_veta = f"{Z_NOM} {SU} podielovými spoluvlastníkmi, každý v rozsahu spoluvlastníckeho podielu, nasledujúcej nehnuteľnosti:"
+else:
+    podiel_veta = f"{Z_NOM} {SU} vlastníkom nasledujúcej nehnuteľnosti:"
 body(N(podiel_veta))
 body(N(NEHNUTELNOST))
 body(N(f"Podiel priestoru na spoločných častiach a spoločných zariadeniach domu, na príslušenstve a spoluvlastnícky podiel k pozemku: {PODIEL_SPOLOCNE}."))
-body(N("(ďalej spoločne byt a pozemok aj ako „nehnuteľnosť“)"))
+body(N(f"(ďalej spoločne {NEHNUTELNOST_LABEL} aj ako „nehnuteľnosť“)"))
 body(N(f"{Z_NOM} {VYHLASUJU}, že nehnuteľnosť nadobudli na základe {TITUL_NADOBUDNUTIA}."))
 body([N(f"{Z_NOM} {VYHLASUJU}, že na nehnuteľnosti viaznu nasledovné ťarchy: {TARCHY}"),
       R("[DOPLNIŤ – aktuálny stav ťarchy/výška zostatku úveru ku dňu podpisu]")], space_after=14)
@@ -237,8 +267,15 @@ body(N(f"Sprostredkovateľ vykoná nevyhnutnú súčinnosť na zabezpečenie odp
        f"potenciálneho kupujúceho, ktorý bude akceptovať podmienky {Z_GEN} a stanovenej budúcej kúpnej ceny."))
 body(N(f"Sprostredkovateľ je povinný informovať {Z_GEN} ihneď po obdržaní záujmu a v prípade porušenia exkluzivity "
        f"má voči {Z_DAT} nárok na zmluvnú pokutu vo výške 10 % z výšky Provízie (článok IV., bod 2.)."))
-body(N("[POZNÁMKA: Sem doplň kompletný text Čl. III zo VZORU vrátane „Ponuky“ (60 dní / dovolenka 1500 EUR), "
-       "exkluzivity a náhrady nákladov — vyššie sú len skrátené záväzky.]"), space_after=14)
+body(N("[POZNÁMKA: Sem doplň text bodov 5.–8. Čl. III zo VZORU — exkluzivita a náhrada nákladov "
+       "(vyššie sú len skrátené záväzky).]"))
+if DATA["vratane_ponuky_9_12"]:
+    body(N("[POZNÁMKA: Sem doplň kompletný text bodov 9.–12. Čl. III zo VZORU — „Ponuka“ "
+           "(predám tvoju nehnuteľnosť alebo dovolenka zdarma, 60 dní / dovolenka 1500 EUR). "
+           "Používateľ potvrdil, že tieto body MAJÚ byť v zmluve.]"), space_after=14)
+else:
+    body(N("[POZNÁMKA: Body 9.–12. Čl. III („Ponuka“ — predám tvoju nehnuteľnosť alebo dovolenka zdarma) "
+           "boli na žiadosť používateľa VYNECHANÉ pre tohto klienta.]"), space_after=14)
 
 # --- Článok IV. Platobné podmienky ---
 heading("Článok IV.", 14)
